@@ -24,13 +24,18 @@ class NerPipelineTest {
         
         assertFalse(entities.isEmpty());
         assertEquals("CYP2C9", entities.getFirst().getText());
+        assertEquals("PA126", entities.getFirst().getAccessionId());
+        assertEquals("Gene", entities.getFirst().getType());
     }
 
     @Test
-    void testOtherPipelineRecognizesKnownOther() {
+    void testOtherPipelineRecognizesVariant() {
         List<DocumentEntity> entities = otherPipeline.run("The patient has rs12345 variant");
         
         assertFalse(entities.isEmpty());
+        assertEquals("rs12345", entities.getFirst().getText());
+        assertEquals("dbSNP", entities.getFirst().getAccessionId());
+        assertEquals("Variant", entities.getFirst().getType());
     }
 
     @Test

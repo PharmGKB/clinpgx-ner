@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Properties;
 
 public class NerPipeline {
-    public enum Type {GENE, OTHER};
+    public enum Type {GENE, OTHER}
 
     private final static Map<Type, String> typeCatalogMap = Map.of(
             Type.GENE,  "clinpgx_mapping_gene.txt",

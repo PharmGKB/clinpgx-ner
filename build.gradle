@@ -40,7 +40,7 @@ shadowJar {
 }
 
 // Ensure the JVM has enough memory when running via Gradle
-tasks.withType(JavaExec) {
+tasks.withType(JavaExec).configureEach {
     jvmArgs = ['-Xmx4g']
 }
 
