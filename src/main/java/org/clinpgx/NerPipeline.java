@@ -38,7 +38,7 @@ public class NerPipeline {
         pipeline = new StanfordCoreNLP(props);
     }
 
-    public List<DocumentEntity> run(String text) {
+    public synchronized List<DocumentEntity> run(String text) {
         List<DocumentEntity> documentEntities = new ArrayList<>();
 
         if (text != null) {

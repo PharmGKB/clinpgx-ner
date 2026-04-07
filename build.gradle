@@ -10,7 +10,7 @@ version = '1.0-SNAPSHOT'
 
 // Replace this with your actual main class path
 application {
-    mainClass = 'org.clinpgx.Main'
+    mainClass = 'org.clinpgx.ApiServer'
 }
 
 repositories {
@@ -30,6 +30,10 @@ dependencies {
 
 // Logging implementation so you can see what CoreNLP is doing
     implementation 'org.slf4j:slf4j-simple:2.0.7'
+
+// HTTP API
+    implementation 'io.javalin:javalin:7.1.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.1'
 }
 
 // Configure the Shadow JAR task
