@@ -65,6 +65,14 @@ class NerPipelineTest {
     }
 
     @Test
+    void testGenePipelineIgnoresStatisticalAbbreviationsAndMatchesDiseaseAbbreviations() {
+        List<DocumentEntity> entities = genePipeline.run("COPD risk rose (OR 1.4, 95% CI 1.1-1.8, SD 0.3).");
+
+        assertEquals(List.of("COPD"), entities.stream().map(DocumentEntity::getText).toList());
+        assertEquals("Phenotype", entities.getFirst().getType());
+    }
+
+    @Test
     void testRunReturnsEmptyListForNullInput() {
         List<DocumentEntity> entities = genePipeline.run(null);
         

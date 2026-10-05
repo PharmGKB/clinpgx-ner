@@ -197,6 +197,50 @@ class MappingBuilderTest {
     }
 
     @Test
+    void testBuildExcludesShortGeneAltNames() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("CI", "Gene", "PA31512", false),
+                new MappingBuilder.Entity("Sd", "Gene", "PA35824", false),
+                new MappingBuilder.Entity("MET", "Gene", "PA30724", true),
+                new MappingBuilder.Entity("P53", "Gene", "PA36679", false),
+                new MappingBuilder.Entity("ATP", "Chemical", "PA164712347", false)));
+
+        // preferred symbols, alphanumeric aliases, and other types are kept
+        assertEquals(List.of("ATP\tChemical\tPA164712347", "MET\tGene\tPA30724", "P53\tGene\tPA36679"),
+                result.geneLines());
+        assertEquals(2, result.excluded().get(MappingBuilder.EXCLUDED_SHORT_GENE_ALIAS));
+    }
+
+    @Test
+    void testBuildPrefersPhenotypeOverGeneWhenBothAreAlt() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("COPD", "Gene", "PA24931", false),
+                new MappingBuilder.Entity("COPD", "Phenotype", "PA447178", false)));
+
+        assertEquals(List.of("COPD\tPhenotype\tPA447178"), result.geneLines());
+        assertTrue(result.warnings().isEmpty());
+    }
+
+    @Test
+    void testBuildKeepsPreferredGeneOverAltPhenotype() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("TNF", "Gene", "PA435", true),
+                new MappingBuilder.Entity("TNF", "Phenotype", "PA1", false)));
+
+        assertEquals(List.of("TNF\tGene\tPA435"), result.geneLines());
+    }
+
+    @Test
+    void testBuildStillDropsPhenotypeVsChemicalAmbiguity() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("DDI", "Chemical", "PA449301", false),
+                new MappingBuilder.Entity("DDI", "Phenotype", "PA165108622", false)));
+
+        assertTrue(result.geneLines().isEmpty());
+        assertEquals(1, result.warnings().size());
+    }
+
+    @Test
     void testBuildExcludesSingleCharacterNames() {
         MappingBuilder.Result result = builder.build(List.of(
                 new MappingBuilder.Entity("C", "Chemical", "PA451862"),

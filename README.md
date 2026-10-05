@@ -126,13 +126,16 @@ The builder:
   - bare codes: all-digit names (SNOMED, PubChem and similar IDs), which would match years and counts like "2019",
     and MeSH IDs like `D015746`
   - single-character names
+  - gene alt names of 2–3 letters (`CI`, `SD`, `MI`, `ER`…), which are mostly old symbols that collide with common
+    abbreviations in papers. Preferred gene symbols (`MET`, `TNF`) and alphanumeric aliases (`P53`) are kept.
 
   It also strips source qualifiers such as `[D]` from names like `[D]Abdominal pain`.
 - **Routes names by type and shape.** `Gene`, `Allele` and `Haplotype` go to the case-sensitive gene file. So do
   short all-caps names of other types, such as `THE` or `NO`, so that they don't match the words "the" and "no".
   Everything else goes to the case-insensitive other file.
 - **Resolves ambiguous names.** If a name maps to more than one entity in the same file, the entity that lists it as
-  its preferred name wins. Otherwise the name is dropped with a warning. The builder also warns about names that
+  its preferred name wins. If no entity prefers it, and it's an alt name for one phenotype and otherwise only genes
+  (`COPD`, `CML`), the phenotype wins. Otherwise the name is dropped with a warning. The builder also warns about names that
   appear in both files, because both pipelines will then match them.
 - **Reports counts per type** and warns if an expected type (`Allele`, `Chemical`, `Gene`, `Phenotype`) has no rows.
   A missing type usually means the dump was exported before the SQL was updated.

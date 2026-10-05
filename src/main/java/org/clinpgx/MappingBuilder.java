@@ -39,6 +39,11 @@ public class MappingBuilder {
     public static final String EXCLUDED_XREF = "cross-reference ID";
     public static final String EXCLUDED_SINGLE_CHARACTER = "single character";
     public static final String EXCLUDED_CODE = "bare numeric or MeSH code";
+    public static final String EXCLUDED_SHORT_GENE_ALIAS = "2-3 letter gene alt name";
+
+    // Gene alt names of 2-3 letters are mostly old symbols that collide with common abbreviations in papers
+    // (CI, SD, MI, ER, ALL). Preferred symbols and alphanumeric aliases like P53 are kept.
+    private static final Pattern SHORT_ALIAS = Pattern.compile("[A-Za-z]{2,3}");
 
     // Full HGVS expressions anchored on a reference sequence, e.g. NM_000771.4(CYP2C9):c.458T>C or
     // NC_000001.11:g.101409030T>G. These rarely appear verbatim in text.
@@ -96,7 +101,7 @@ public class MappingBuilder {
         Map<String, Integer> excluded = new LinkedHashMap<>();
 
         for (Entity entity : entities) {
-            String reason = exclusionReason(entity.name());
+            String reason = exclusionReason(entity);
             if (reason != null) {
                 excluded.merge(reason, 1, Integer::sum);
                 continue;
@@ -111,7 +116,7 @@ public class MappingBuilder {
             (isGeneFile ? gene : other)
                     .computeIfAbsent(key, k -> new LinkedHashMap<>())
                     .merge(entity.type() + "\t" + entity.id(),
-                            new Candidate(pattern + "\t" + entity.type() + "\t" + entity.id(), entity.preferred()),
+                            new Candidate(pattern + "\t" + entity.type() + "\t" + entity.id(), entity.type(), entity.preferred()),
                             // the same entity can list a name as both preferred and alt
                             (a, b) -> a.preferred() ? a : b);
         }
@@ -131,13 +136,27 @@ public class MappingBuilder {
         return new Result(geneLines, otherLines, warnings, excluded);
     }
 
-    private record Candidate(String line, boolean preferred) {}
+    private record Candidate(String line, String type, boolean preferred) {}
 
     private static boolean isAbbreviation(String name) {
         return ABBREVIATION.matcher(name).matches() && name.chars().anyMatch(Character::isLetter);
     }
 
-    private static String exclusionReason(String name) {
+    /**
+     * When nobody prefers a name and it's an alt for one phenotype and only genes otherwise (COPD, CML), the phenotype
+     * wins: in text these are far more often the disease abbreviation than an old gene symbol.
+     */
+    private static Candidate phenotypeOverGenes(Collection<Candidate> candidates) {
+        if (candidates.stream().anyMatch(Candidate::preferred)) {
+            return null;
+        }
+        List<Candidate> phenotypes = candidates.stream().filter(c -> c.type().equals("Phenotype")).toList();
+        boolean restAreGenes = candidates.stream().allMatch(c -> c.type().equals("Phenotype") || c.type().equals("Gene"));
+        return phenotypes.size() == 1 && restAreGenes ? phenotypes.getFirst() : null;
+    }
+
+    private static String exclusionReason(Entity entity) {
+        String name = entity.name();
         if (name.length() == 1) {
             return EXCLUDED_SINGLE_CHARACTER;
         }
@@ -150,6 +169,9 @@ public class MappingBuilder {
         if (BARE_CODE.matcher(name).matches()) {
             return EXCLUDED_CODE;
         }
+        if (entity.type().equals("Gene") && !entity.preferred() && SHORT_ALIAS.matcher(name).matches()) {
+            return EXCLUDED_SHORT_GENE_ALIAS;
+        }
         return null;
     }
 
@@ -157,10 +179,13 @@ public class MappingBuilder {
         List<String> lines = new ArrayList<>();
         byKey.forEach((key, candidates) -> {
             List<Candidate> preferred = candidates.values().stream().filter(Candidate::preferred).toList();
+            Candidate phenotype = phenotypeOverGenes(candidates.values());
             if (candidates.size() == 1) {
                 lines.add(candidates.values().iterator().next().line());
             } else if (preferred.size() == 1) {
                 lines.add(preferred.getFirst().line());
+            } else if (phenotype != null) {
+                lines.add(phenotype.line());
             } else {
                 warnings.add("Ambiguous in " + file + " (dropped): " + key + " -> " + String.join(", ", candidates.keySet()));
             }

@@ -50,7 +50,7 @@ The two mapping `.txt` files are generated, not hand-edited: `./gradlew buildMap
 `mappings/clinpgx_entities.tsv` (`name<TAB>type<TAB>id<TAB>preferred|alt` dump from `mappings/clinpgx_entities.sql`).
 `MappingBuilder` tokenizes names with `NerPipeline.TOKENIZE_OPTIONS` — entries must use the same token splits as the
 text (e.g. `HLA-B` → `HLA - B`), or they silently never match. It also filters HGVS-on-reference-sequence names,
-cross-reference IDs, bare numeric/MeSH codes, and single characters, strips `[D]`-style qualifier prefixes, and resolves ambiguous names in favor of the preferred name. It warns when an expected type (`MappingBuilder.EXPECTED_TYPES`: Allele, Chemical, Gene, Phenotype) has no rows, which usually means the dump is stale.
+cross-reference IDs, bare numeric/MeSH codes, single characters, and 2–3 letter gene alt names, strips `[D]`-style qualifier prefixes, and resolves ambiguous names in favor of the preferred name (then: a lone alt Phenotype beats alt Genes). It warns when an expected type (`MappingBuilder.EXPECTED_TYPES`: Allele, Chemical, Gene, Phenotype) has no rows, which usually means the dump is stale.
 
 ## Key Behaviors
 
