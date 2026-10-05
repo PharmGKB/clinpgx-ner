@@ -1,6 +1,6 @@
 ### POST request to check the response for a sentence with known matches
 POST http://localhost:7001/ner
 
-this sentence mentions CYP2C9 variant rs12345 and nothing else.
+this sentence mentions CYP2C9, the drug clopidogrel, and variant rs12345 and nothing else.
 
 ###
