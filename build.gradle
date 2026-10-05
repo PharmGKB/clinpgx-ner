@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'application'
     // The Shadow plugin for creating the Fat JAR
-    id 'com.gradleup.shadow' version '9.3.1'
+    id 'com.gradleup.shadow' version '9.6.1'
 }
 
 group = 'org.clinpgx'
@@ -19,21 +19,21 @@ repositories {
 
 dependencies {
     // JUnit 5 for testing
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-// Core NLP Logic
-    implementation 'edu.stanford.nlp:stanford-corenlp:4.5.10'
+    // Core NLP Logic
+    implementation 'edu.stanford.nlp:stanford-corenlp:4.6.0'
 
-// Core NLP English Models (Required for tokenization/parsing)
-    implementation group: 'edu.stanford.nlp', name: 'stanford-corenlp', version: '4.5.10', classifier: 'models'
+    // Core NLP English Models (Required for tokenization/parsing)
+    implementation 'edu.stanford.nlp:stanford-corenlp:4.6.0:models'
 
-// Logging implementation so you can see what CoreNLP is doing
-    implementation 'org.slf4j:slf4j-simple:2.0.7'
+    // Logging implementation so you can see what CoreNLP is doing
+    implementation 'org.slf4j:slf4j-simple:2.0.20'
 
-// HTTP API
-    implementation 'io.javalin:javalin:7.1.0'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.20.1'
+    // HTTP API
+    implementation 'io.javalin:javalin:7.2.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.3'
 }
 
 // Configure the Shadow JAR task
