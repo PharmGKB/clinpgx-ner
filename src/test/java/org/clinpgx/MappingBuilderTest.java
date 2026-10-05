@@ -21,21 +21,21 @@ class MappingBuilderTest {
     }
 
     @Test
-    void testToPatternSplitsHyphens() {
-        assertEquals("HLA - B", builder.toPattern("HLA-B"));
+    void testToTokensSplitsHyphens() {
+        assertEquals("HLA - B", builder.toTokens("HLA-B"));
     }
 
     @Test
-    void testToPatternEscapesRegexCharacters() {
-        assertEquals("CYP2C19 \\* 2", builder.toPattern("CYP2C19*2"));
-        assertEquals("abacavir \\( ABC \\)", builder.toPattern("abacavir (ABC)"));
-        assertEquals("St\\. John 's wort", builder.toPattern("St. John's wort"));
+    void testToTokensSplitsPunctuationWithoutEscaping() {
+        assertEquals("CYP2C19 * 2", builder.toTokens("CYP2C19*2"));
+        assertEquals("abacavir ( ABC )", builder.toTokens("abacavir (ABC)"));
+        assertEquals("St. John 's wort", builder.toTokens("St. John's wort"));
     }
 
     @Test
-    void testToPatternLeavesPlainTokensUnescaped() {
-        assertEquals("CYP2C9", builder.toPattern("CYP2C9"));
-        assertEquals("warfarin", builder.toPattern("  warfarin "));
+    void testToTokensStripsWhitespace() {
+        assertEquals("CYP2C9", builder.toTokens("CYP2C9"));
+        assertEquals("warfarin", builder.toTokens("  warfarin "));
     }
 
     @Test
@@ -44,10 +44,10 @@ class MappingBuilderTest {
                 new MappingBuilder.Entity("CYP2C19", "Gene", "PA124"),
                 new MappingBuilder.Entity("CYP2C19*2", "Haplotype", "PA165980635"),
                 new MappingBuilder.Entity("warfarin", "Chemical", "PA451906"),
-                new MappingBuilder.Entity("Diabetes Mellitus", "Disease", "PA443890")));
+                new MappingBuilder.Entity("Diabetes Mellitus", "Phenotype", "PA443890")));
 
-        assertEquals(List.of("CYP2C19\tGene\tPA124", "CYP2C19 \\* 2\tHaplotype\tPA165980635"), result.geneLines());
-        assertEquals(List.of("warfarin\tChemical\tPA451906", "Diabetes Mellitus\tDisease\tPA443890"), result.otherLines());
+        assertEquals(List.of("CYP2C19\tGene\tPA124", "CYP2C19 * 2\tHaplotype\tPA165980635"), result.geneLines());
+        assertEquals(List.of("warfarin\tChemical\tPA451906", "Diabetes Mellitus\tPhenotype\tPA443890"), result.otherLines());
     }
 
     @Test
@@ -123,7 +123,7 @@ class MappingBuilderTest {
                 new MappingBuilder.Entity("c.1236G>A", "Allele", "PA4"),
                 new MappingBuilder.Entity("NM_000771", "Gene", "PA126")));
 
-        assertEquals(List.of("c\\. 1236G > A\tAllele\tPA4", "NM_000771\tGene\tPA126"), result.geneLines());
+        assertEquals(List.of("c. 1236G > A\tAllele\tPA4", "NM_000771\tGene\tPA126"), result.geneLines());
         assertEquals(3, result.excluded().get(MappingBuilder.EXCLUDED_HGVS));
     }
 
@@ -171,6 +171,32 @@ class MappingBuilderTest {
     }
 
     @Test
+    void testBuildStripsBracketedQualifierPrefix() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("[D]Abdominal pain", "Phenotype", "PA446220", false),
+                new MappingBuilder.Entity("Abdominal Pain", "Phenotype", "PA446220", true),
+                new MappingBuilder.Entity("[M]Familial polyposis coli", "Phenotype", "PA445381", false)));
+
+        // "[D]Abdominal pain" collapses into the preferred "Abdominal Pain" entry
+        assertEquals(List.of("Abdominal Pain\tPhenotype\tPA446220", "Familial polyposis coli\tPhenotype\tPA445381"),
+                result.otherLines());
+    }
+
+    @Test
+    void testBuildExcludesBareCodes() {
+        MappingBuilder.Result result = builder.build(List.of(
+                new MappingBuilder.Entity("2019", "Chemical", "PA448794", false),
+                new MappingBuilder.Entity("21522001", "Phenotype", "PA446220", false),
+                new MappingBuilder.Entity("D015746", "Phenotype", "PA446220", false),
+                new MappingBuilder.Entity("D2HGDH", "Gene", "PA162383590"),
+                new MappingBuilder.Entity("1,2-dimethylhydrazine", "Chemical", "PA1")));
+
+        assertEquals(List.of("D2HGDH\tGene\tPA162383590"), result.geneLines());
+        assertEquals(List.of("1,2 - dimethylhydrazine\tChemical\tPA1"), result.otherLines());
+        assertEquals(3, result.excluded().get(MappingBuilder.EXCLUDED_CODE));
+    }
+
+    @Test
     void testBuildExcludesSingleCharacterNames() {
         MappingBuilder.Result result = builder.build(List.of(
                 new MappingBuilder.Entity("C", "Chemical", "PA451862"),
@@ -179,6 +205,15 @@ class MappingBuilderTest {
         assertTrue(result.otherLines().isEmpty());
         assertTrue(result.geneLines().isEmpty());
         assertEquals(2, result.excluded().get(MappingBuilder.EXCLUDED_SINGLE_CHARACTER));
+    }
+
+    @Test
+    void testMissingTypesReportsExpectedTypesWithNoEntities() {
+        List<MappingBuilder.Entity> entities = List.of(
+                new MappingBuilder.Entity("CYP2C9", "Gene", "PA126"),
+                new MappingBuilder.Entity("warfarin", "Chemical", "PA451906"));
+
+        assertEquals(List.of("Allele", "Phenotype"), MappingBuilder.missingTypes(entities));
     }
 
     @Test
@@ -211,9 +246,7 @@ class MappingBuilderTest {
                 "A1BG-AS1\tGene\tPA165392995",
                 "5-fluorouracil\tChemical\tPA128406956",
                 "abacavir\tChemical\tPA448004"));
-        Path variants = Path.of("mappings/variant_patterns.txt");
-
-        MappingBuilder.writeMappings(builder.build(MappingBuilder.readEntities(input)), variants, dir);
+        MappingBuilder.writeMappings(builder.build(MappingBuilder.readEntities(input)), dir);
 
         NerPipeline genes = new NerPipeline(NerPipeline.Type.GENE, dir.resolve(MappingBuilder.GENE_FILE).toString());
         NerPipeline other = new NerPipeline(NerPipeline.Type.OTHER, dir.resolve(MappingBuilder.OTHER_FILE).toString());

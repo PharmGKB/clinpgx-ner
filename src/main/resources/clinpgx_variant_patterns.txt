@@ -1,4 +1,4 @@
-# Hand-maintained variant patterns, appended to clinpgx_mapping_other.txt by MappingBuilder.
+# Hand-maintained variant patterns, matched by the OTHER pipeline (case-insensitive).
 # Format: pattern<TAB>type<TAB>id. Each space-separated part is a regex matched against one token,
 # so multi-token notations must be split the way the tokenizer splits them (c.123A>G -> c. 123A > G).
 # At the end of a sentence the tokenizer keeps a trailing period on a single capital letter (G.), hence \.?

@@ -11,15 +11,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Builds the RegexNER mapping files from a tab-delimited dump of entities
+ * Builds the dictionary files from a tab-delimited dump of entities
  * ({@code name<TAB>type<TAB>id[<TAB>preferred|alt]}).
  * <p>
- * Each name is run through the same tokenizer {@link NerPipeline} uses, so a pattern like {@code HLA-B} becomes
- * {@code HLA - B} and lines up with how the name is tokenized in text. Genes, alleles, and short all-caps abbreviations
- * go to the case-sensitive gene file; everything else goes to the case-insensitive other file, followed by the
- * hand-maintained variant patterns.
+ * Each name is run through the same tokenizer {@link NerPipeline} uses, so {@code HLA-B} is stored as {@code HLA - B}
+ * and lines up with how the name is tokenized in text. Genes, alleles, and short all-caps abbreviations go to the
+ * case-sensitive gene file; everything else goes to the case-insensitive other file.
  * <p>
- * Usage: {@code MappingBuilder <entities.tsv> <variant_patterns.txt> <output dir>}
+ * Usage: {@code MappingBuilder <entities.tsv> <output dir>}
  */
 public class MappingBuilder {
     public static final String GENE_FILE = "clinpgx_mapping_gene.txt";
@@ -28,20 +27,21 @@ public class MappingBuilder {
     // Types matched case-sensitively in the gene pipeline; all other types are matched case-insensitively
     private static final Set<String> GENE_FILE_TYPES = Set.of("Gene", "Haplotype", "Allele");
 
+    // Types every dump should contain; a missing one usually means the export query is out of date
+    static final List<String> EXPECTED_TYPES = List.of("Allele", "Chemical", "Gene", "Phenotype");
+
     // Short all-caps names of other types (THE, NO, 5-FU) are abbreviations; matching them case-insensitively would
     // tag ordinary words like "the" and "no", so they go to the case-sensitive gene file instead
     private static final Pattern ABBREVIATION = Pattern.compile("[A-Z0-9-]{2,6}");
-
-    // Characters TokensRegexNER treats as regex syntax. Tokens without them are compared as plain strings.
-    private static final String REGEX_CHARS = "[]?.\\^$()*+{}|";
 
     // Reasons an entity is left out of the mapping files entirely
     public static final String EXCLUDED_HGVS = "HGVS name with reference sequence";
     public static final String EXCLUDED_XREF = "cross-reference ID";
     public static final String EXCLUDED_SINGLE_CHARACTER = "single character";
+    public static final String EXCLUDED_CODE = "bare numeric or MeSH code";
 
     // Full HGVS expressions anchored on a reference sequence, e.g. NM_000771.4(CYP2C9):c.458T>C or
-    // NC_000001.11:g.101409030T>G. These rarely appear verbatim in text and are slow for RegexNER to match.
+    // NC_000001.11:g.101409030T>G. These rarely appear verbatim in text.
     // Bare forms like c.1236G>A are kept.
     private static final Pattern HGVS_WITH_REFERENCE =
             Pattern.compile("^(?:N[CGMPRTW]|X[MPR]|ENS[GPT]|LRG)_?\\d+(?:\\.\\d+)?(?:\\([^)]*\\))?:[cgmnopr]\\.");
@@ -49,6 +49,13 @@ public class MappingBuilder {
     // Database cross-references from the search index, e.g. refSeqProtein:NP_000762 or HGNC:2623
     private static final Pattern CROSS_REFERENCE =
             Pattern.compile("^(?:refSeq(?:Dna|Rna|Protein)|HGNC|ATC|RxNorm|MeSH|SnoMedCT):\\S+$");
+
+    // Unprefixed codes from the search index: numeric IDs (SNOMED, PubChem, ...) and MeSH IDs like D015746.
+    // Numeric ones match years and counts in text ("In 2019, 120 patients").
+    private static final Pattern BARE_CODE = Pattern.compile("[0-9]+|[CD][0-9]{6,9}");
+
+    // Source qualifiers some names carry, e.g. "[D]Abdominal pain"; they never appear in text
+    private static final Pattern QUALIFIER_PREFIX = Pattern.compile("^\\[[A-Z]]\\s*");
 
     public record Entity(String name, String type, String id, boolean preferred) {
         public Entity(String name, String type, String id) {
@@ -69,30 +76,18 @@ public class MappingBuilder {
     }
 
     /**
-     * Converts an entity name to a RegexNER pattern: one escaped regex per token, separated by spaces.
+     * Converts an entity name to its dictionary key: the name's tokens, separated by spaces.
      */
-    public String toPattern(String name) {
+    public String toTokens(String name) {
         return tokenizer.processToCoreDocument(name.strip()).tokens().stream()
                 .map(CoreLabel::word)
-                .map(MappingBuilder::escape)
                 .collect(Collectors.joining(" "));
-    }
-
-    private static String escape(String token) {
-        StringBuilder sb = new StringBuilder(token.length());
-        for (char c : token.toCharArray()) {
-            if (REGEX_CHARS.indexOf(c) >= 0) {
-                sb.append('\\');
-            }
-            sb.append(c);
-        }
-        return sb.toString();
     }
 
     /**
      * Splits entities into gene and other mapping lines. When a name maps to more than one type/ID within a file, the
      * one entity that lists it as its preferred name wins; if there isn't exactly one, the name is dropped, since
-     * RegexNER would silently keep whichever came first.
+     * the pipeline would silently keep whichever came first.
      */
     public Result build(List<Entity> entities) {
         // key -> distinct (type, id) candidates, in input order
@@ -106,7 +101,7 @@ public class MappingBuilder {
                 excluded.merge(reason, 1, Integer::sum);
                 continue;
             }
-            String pattern = toPattern(entity.name());
+            String pattern = toTokens(QUALIFIER_PREFIX.matcher(entity.name()).replaceFirst(""));
             if (pattern.isEmpty()) {
                 continue;
             }
@@ -151,6 +146,9 @@ public class MappingBuilder {
         }
         if (CROSS_REFERENCE.matcher(name).matches()) {
             return EXCLUDED_XREF;
+        }
+        if (BARE_CODE.matcher(name).matches()) {
+            return EXCLUDED_CODE;
         }
         return null;
     }
@@ -201,38 +199,43 @@ public class MappingBuilder {
     }
 
     /**
-     * Writes the gene and other mapping files to {@code outputDir}, appending the variant patterns to the other file.
+     * Returns the {@link #EXPECTED_TYPES} that have no entities.
      */
-    public static void writeMappings(Result result, Path variantPatterns, Path outputDir) throws IOException {
-        List<String> variants = Files.readAllLines(variantPatterns).stream()
-                .filter(l -> !l.isBlank() && !l.startsWith("#"))
-                .toList();
-        List<String> otherLines = new ArrayList<>(result.otherLines());
-        otherLines.addAll(variants);
+    static List<String> missingTypes(List<Entity> entities) {
+        Set<String> present = entities.stream().map(Entity::type).collect(Collectors.toSet());
+        return EXPECTED_TYPES.stream().filter(t -> !present.contains(t)).toList();
+    }
 
+    /**
+     * Writes the gene and other dictionary files to {@code outputDir}.
+     */
+    public static void writeMappings(Result result, Path outputDir) throws IOException {
         Files.createDirectories(outputDir);
         Files.write(outputDir.resolve(GENE_FILE), result.geneLines());
-        Files.write(outputDir.resolve(OTHER_FILE), otherLines);
+        Files.write(outputDir.resolve(OTHER_FILE), result.otherLines());
     }
 
     public static void main(String[] args) throws IOException {
-        if (args.length != 3) {
-            System.err.println("Usage: MappingBuilder <entities.tsv> <variant_patterns.txt> <output dir>");
+        if (args.length != 2) {
+            System.err.println("Usage: MappingBuilder <entities.tsv> <output dir>");
             System.exit(1);
         }
         Path input = Path.of(args[0]);
-        Path variants = Path.of(args[1]);
-        Path outputDir = Path.of(args[2]);
+        Path outputDir = Path.of(args[1]);
 
         List<Entity> entities = readEntities(input);
         Result result = new MappingBuilder().build(entities);
-        writeMappings(result, variants, outputDir);
+        writeMappings(result, outputDir);
 
         result.warnings().forEach(w -> System.out.println("WARN " + w));
         System.out.printf("Read %d entities from %s%n", entities.size(), input);
+        entities.stream()
+                .collect(Collectors.groupingBy(Entity::type, TreeMap::new, Collectors.counting()))
+                .forEach((type, count) -> System.out.printf("  %-10s %d%n", type, count));
+        missingTypes(entities).forEach(t -> System.out.println("WARN No entities of type " + t + " in " + input));
         result.excluded().forEach((reason, count) -> System.out.printf("Excluded %d (%s)%n", count, reason));
         System.out.printf("Wrote %d lines to %s%n", result.geneLines().size(), outputDir.resolve(GENE_FILE));
-        System.out.printf("Wrote %d lines (plus variant patterns) to %s%n", result.otherLines().size(), outputDir.resolve(OTHER_FILE));
+        System.out.printf("Wrote %d lines to %s%n", result.otherLines().size(), outputDir.resolve(OTHER_FILE));
         System.out.printf("%d warnings%n", result.warnings().size());
     }
 }

@@ -8,7 +8,7 @@ from
         join summarysearch ss on s.id = ss.id and s.objecttype = ss.objecttype
         join pgkbcomm.pharmgkbobjecttypes p on s.objecttype = p.pharmgkbobjtypeid
 where
-    p.name in ('Chemical', 'Disease', 'Gene', 'SNV', 'Haplotype', 'StarAllele', 'HlaAllele', 'GeneCopyNumberVariation')
+    p.name in ('Chemical', 'Phenotype', 'Gene', 'SNV', 'Haplotype', 'StarAllele', 'HlaAllele', 'GeneCopyNumberVariation')
   and ss.name != s.id
   and s.hasdata = true
 order by p.name, s.name, ss.name;

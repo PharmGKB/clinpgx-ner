@@ -22,11 +22,8 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // Core NLP Logic
+    // Core NLP tokenizer. The separate models artifact isn't needed: tokenization is rule-based.
     implementation 'edu.stanford.nlp:stanford-corenlp:4.6.0'
-
-    // Core NLP English Models (Required for tokenization/parsing)
-    implementation 'edu.stanford.nlp:stanford-corenlp:4.6.0:models'
 
     // Logging implementation so you can see what CoreNLP is doing
     implementation 'org.slf4j:slf4j-simple:2.0.20'
@@ -43,23 +40,22 @@ shadowJar {
     archiveVersion.set('')
 }
 
-// Regenerate the RegexNER mapping files from a name<TAB>type<TAB>id dump of ClinPGx entities.
+// Regenerate the dictionary files from a name<TAB>type<TAB>id<TAB>preferred|alt dump of ClinPGx entities.
 // Usage: ./gradlew buildMappings [-Pentities=path/to/dump.tsv]
 tasks.register('buildMappings', JavaExec) {
     group = 'build'
-    description = 'Builds src/main/resources mapping files from an entity dump'
+    description = 'Builds src/main/resources dictionary files from an entity dump'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.clinpgx.MappingBuilder'
     args = [
             project.findProperty('entities') ?: 'mappings/clinpgx_entities.tsv',
-            'mappings/variant_patterns.txt',
             'src/main/resources'
     ]
 }
 
-// Ensure the JVM has enough memory when running via Gradle
+// Both pipelines need about 50 MB of heap; leave headroom for large request bodies
 tasks.withType(JavaExec).configureEach {
-    jvmArgs = ['-Xmx4g']
+    jvmArgs = ['-Xmx512m']
 }
 
 // Set Java compatibility
