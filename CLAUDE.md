@@ -30,8 +30,8 @@ Requires Java 21. JVM is configured with `-Xmx4g` for Gradle-executed tasks (Sta
 ## Architecture
 
 **NerPipeline** is the core class. It wraps a Stanford CoreNLP pipeline configured with `regexner` and `entitymentions` annotators. There are two pipeline types:
-- `Type.GENE` - case-sensitive matching against `clinpgx_mapping_gene.txt` (tab-delimited: pattern, NER type, PA accession ID)
-- `Type.OTHER` - case-insensitive matching against `clinpgx_mapping_other.txt` (drugs, plus regex patterns for variants like `rs[0-9]+`)
+- `Type.GENE` - case-sensitive matching against `clinpgx_mapping_gene.txt` (genes and haplotypes; tab-delimited: pattern, NER type, PA accession ID)
+- `Type.OTHER` - case-insensitive matching against `clinpgx_mapping_other.txt` (all other entity types, plus regex patterns for variants like `rs[0-9]+`)
 
 `NerPipeline.runAll(text)` is the main entry point for consumers - it runs both pipelines and merges results.
 
@@ -40,11 +40,16 @@ Requires Java 21. JVM is configured with `-Xmx4g` for Gradle-executed tasks (Sta
 ## Entity Mapping Files
 
 Located in `src/main/resources/`:
-- `clinpgx_mapping_gene.txt` - gene names with PharmGKB PA IDs
-- `clinpgx_mapping_other.txt` - drugs and other entities with PA IDs
-- `clinpgx_mappings.sql` - the SQL query used to generate the mapping files from PharmGKB
+- `clinpgx_mapping_gene.txt` - genes and haplotypes with PharmGKB PA IDs
+- `clinpgx_mapping_other.txt` - all other entities with PA IDs, plus variant patterns
+- `clinpgx_mapping_*.sql` - SQL queries against the PharmGKB database
 
 The mapping files use Stanford RegexNER format with header: `pattern, ner, normalized, overwrite, priority, group`.
+
+The `.txt` files are generated, not hand-edited: `./gradlew buildMappings` runs `MappingBuilder` over
+`mappings/clinpgx_entities.tsv` (raw `name<TAB>type<TAB>id` dump) and `mappings/variant_patterns.txt` (hand-maintained
+regexes). `MappingBuilder` tokenizes names with `NerPipeline.TOKENIZE_OPTIONS` — patterns must use the same token
+splits as the text (e.g. `HLA-B` → `HLA - B`), or they silently never match.
 
 ## Key Behaviors
 

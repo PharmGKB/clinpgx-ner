@@ -21,18 +21,25 @@ public class NerPipeline {
             Type.GENE, "false",
             Type.OTHER, "true");
 
+    // Use these flags to keep technical strings like CYP2C9 or rs12345 together.
+    // MappingBuilder tokenizes entity names with the same options so patterns line up with tokenized text.
+    static final String TOKENIZE_OPTIONS = "strictTreebank3=false,untokenizable=noneKeep,ptb3Escaping=false";
+
     private final StanfordCoreNLP pipeline;
 
     public NerPipeline(Type type) {
+        this(type, typeCatalogMap.get(type));
+    }
+
+    NerPipeline(Type type, String mapping) {
         // 1. Set up the pipeline properties
         Properties props = new Properties();
         props.setProperty("annotators", "tokenize, regexner, entitymentions");
-        props.setProperty("regexner.mapping", typeCatalogMap.get(type));
+        props.setProperty("regexner.mapping", mapping);
         props.setProperty("regexner.ignorecase", caseSensitivityMap.get(type));
         props.setProperty("regexner.backgroundSymbol", "O");
         props.setProperty("regexner.mapping.header", "pattern,ner,normalized,overwrite,priority,group");
-        // Use these flags to keep technical strings like CYP2C9 or rs12345 together
-        props.setProperty("tokenize.options", "strictTreebank3=false,untokenizable=noneKeep,ptb3Escaping=false");
+        props.setProperty("tokenize.options", TOKENIZE_OPTIONS);
 
         // 2. Build the pipeline
         pipeline = new StanfordCoreNLP(props);

@@ -43,6 +43,20 @@ shadowJar {
     archiveVersion.set('')
 }
 
+// Regenerate the RegexNER mapping files from a name<TAB>type<TAB>id dump of ClinPGx entities.
+// Usage: ./gradlew buildMappings [-Pentities=path/to/dump.tsv]
+tasks.register('buildMappings', JavaExec) {
+    group = 'build'
+    description = 'Builds src/main/resources mapping files from an entity dump'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.clinpgx.MappingBuilder'
+    args = [
+            project.findProperty('entities') ?: 'mappings/clinpgx_entities.tsv',
+            'mappings/variant_patterns.txt',
+            'src/main/resources'
+    ]
+}
+
 // Ensure the JVM has enough memory when running via Gradle
 tasks.withType(JavaExec).configureEach {
     jvmArgs = ['-Xmx4g']
